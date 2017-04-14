@@ -8,6 +8,14 @@
 *.war
 *.ear
 
+#Netbeans
+nbproject/private/
+build/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 
@@ -61,3 +69,9 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
+nbproject/build-impl.xml
+nbproject/project.properties
+*.properties
+nbproject/project.xml
+build.xml
+out.png
