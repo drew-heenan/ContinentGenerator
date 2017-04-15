@@ -123,10 +123,27 @@ public class ContinentGenerator {
                         }
                         return false;
                     });
-                    if(checked.size() < minimumLakeSize) 
+                    if(checked.size() < this.minimumLakeSize) 
                         for(Point pt : checked)
                             landMap[pt.x][pt.y] = true;
                 }
+            }
+        }
+        
+        //Find coastal and lakeshore tiles
+        List<Point> coastalTiles = new ArrayList<>();
+        for(int x = 0; x < this.size; x++) {
+            CONT: for(int y = 0; y < this.size; y++) {
+                if(seaMap[x][y])
+                    for(int dx = -1; dx <= 1; dx++) 
+                        for(int dy = -1; dy <= 1; dy++) {
+                            int rx = x + dx, ry = y + dy;
+                            if(rx >= 0 && rx < this.size && ry >= 0 && ry < this.size)
+                                if(dx != dy && landMap[rx][ry]) { 
+                                    coastalTiles.add(new Point(x, y));
+                                    continue CONT;
+                                }
+                        }
             }
         }
         
@@ -134,7 +151,7 @@ public class ContinentGenerator {
         BufferedImage img = new BufferedImage(this.size, this.size, BufferedImage.TYPE_INT_RGB);
         for(int x = 0; x < this.size; x++)
             for(int y = 0; y < this.size; y++)
-                img.setRGB(x, y, new Color(0, landMap[x][y] ? 255 : 0, seaMap[x][y] ? 255 : 0).getRGB());
+                img.setRGB(x, y, new Color(coastalTiles.contains(new Point(x, y)) ? 255 : 0, landMap[x][y] ? 255 : 0, seaMap[x][y] ? 255 : 0).getRGB());
         try {
             ImageIO.write(img, "png", new File("out.png"));
         } catch (IOException ex) {
