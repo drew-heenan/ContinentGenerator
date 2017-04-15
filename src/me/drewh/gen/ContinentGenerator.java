@@ -6,6 +6,8 @@ import java.awt.Point;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 import java.util.Stack;
 import java.util.function.Predicate;
@@ -28,6 +30,7 @@ public class ContinentGenerator {
     }
     
     private int size = 1000, seed = 0;
+    private int minimumLakeSize = 100;
     private double xScale = 0.01, yScale = 0.01;
     private double expansionChanceMultiplier = 3.0;
     
@@ -41,6 +44,10 @@ public class ContinentGenerator {
     
     public void setExpansionChanceMultiplier(double multiplier) {
         this.expansionChanceMultiplier = multiplier;
+    }
+    
+    public void setMinimumLakeSize(int minimumLakeSize) {
+        this.minimumLakeSize = minimumLakeSize;
     }
     
     public void setXScale(double xScale) {
@@ -63,6 +70,7 @@ public class ContinentGenerator {
         
         Random rand = new Random(this.seed);
         
+        //Generate a landmass.
         boolean[][] landMap = new boolean[this.size][this.size];
         Point fromPt = new Point(this.size/2, this.size/2);//new Point(this.size/2 + (int)(radius*Math.cos(theta)), this.size/2 + (int)(radius*Math.sin(theta)));
         Stack<Point> cellFillStack = new Stack<>();
@@ -84,8 +92,9 @@ public class ContinentGenerator {
             });
         }
         
+        //Fill in the sea.
         boolean[][] seaMap = new boolean[this.size][this.size];
-        Predicate<Point> seaFillPredicate = (Point pt) -> {
+        Predicate<Point> seaFillPredicate = pt -> {
             if(pt.x >= 0 && pt.x < this.size && pt.y >= 0 && pt.y < this.size)
                 if(!seaMap[pt.x][pt.y] && !landMap[pt.x][pt.y]) {
                     seaMap[pt.x][pt.y] = true;
@@ -100,6 +109,25 @@ public class ContinentGenerator {
         for(int y = 0; y < this.size; y++) {
             fill(new Point(0, y), seaFillPredicate);
             fill(new Point(this.size - 1, y), seaFillPredicate);
+        }
+        
+        //Fill in lakes that are too small.
+        for(int x = 0; x < this.size; x++) {
+            for(int y = 0; y < this.size; y++) {
+                if(!seaMap[x][y] && !landMap[x][y]) {
+                    List<Point> checked = new ArrayList<>();
+                    fill(new Point(x, y), pt -> {
+                        if(!seaMap[pt.x][pt.y] && !landMap[pt.x][pt.y] && !checked.contains(pt)) {
+                            checked.add(pt);
+                            return checked.size() < this.minimumLakeSize;
+                        }
+                        return false;
+                    });
+                    if(checked.size() < minimumLakeSize) 
+                        for(Point pt : checked)
+                            landMap[pt.x][pt.y] = true;
+                }
+            }
         }
         
         //Save the output in the landMap, for now
