@@ -21,12 +21,14 @@ public class ContinentGenerator {
     
     public static void main(String[] args) {
         ContinentGenerator gen = new ContinentGenerator();
+        gen.setXScale(0.05);
+        gen.setYScale(0.06);
         gen.generate();
     }
     
-    private int voronoiSelectorPoints = 50, voronoiPointsRadius = 200;
     private int size = 1000, seed = 0;
     private double xScale = 0.01, yScale = 0.01;
+    private double expansionChanceMultiplier = 3.0;
     
     public void setSeed(int seed) {
         this.seed = seed;
@@ -34,16 +36,10 @@ public class ContinentGenerator {
     
     public void setSize(int size) {
         this.size = size;
-        if(size < this.voronoiPointsRadius)
-            this.voronoiPointsRadius = size;
     }
     
-    public void setVoronoiSelectorPointCount(int count) {
-        this.voronoiSelectorPoints = count;
-    }
-    
-    public void setVoronoiSelectorPointRadius(int radius) {
-        this.voronoiPointsRadius = radius > size ? size : radius;
+    public void setExpansionChanceMultiplier(double multiplier) {
+        this.expansionChanceMultiplier = multiplier;
     }
     
     public void setXScale(double xScale) {
@@ -66,22 +62,27 @@ public class ContinentGenerator {
         
         Random rand = new Random(this.seed);
         boolean[][] landMap = new boolean[this.size][this.size];
-        for(int pointNum = 0; pointNum < this.voronoiSelectorPoints; pointNum++) {
-            int radius = rand.nextInt(voronoiPointsRadius);
-            double theta = rand.nextDouble() * Math.PI * 2;
-            Point fromPt = new Point(this.size/2 + (int)(radius*Math.cos(theta)), this.size/2 + (int)(radius*Math.sin(theta)));
-            if(!landMap[fromPt.x][fromPt.y]) {
-                double fillValue = voronoiMap[fromPt.x][fromPt.y];
-                fill(fromPt, pt -> {
-                    if(pt.x >= 0 && pt.x < this.size && pt.y >= 0 && pt.y < this.size)
-                        if (!landMap[pt.x][pt.y] && voronoiMap[pt.x][pt.y] == fillValue) {
+        Point fromPt = new Point(this.size/2, this.size/2);//new Point(this.size/2 + (int)(radius*Math.cos(theta)), this.size/2 + (int)(radius*Math.sin(theta)));
+        Stack<Point> cellFillStack = new Stack<>();
+        cellFillStack.push(fromPt);
+        while(!cellFillStack.isEmpty()) {
+            Point cellPt = cellFillStack.pop();
+            double fillValue = voronoiMap[cellPt.x][cellPt.y];
+            fill(cellPt, pt -> {
+                if(pt.x >= 0 && pt.x < this.size && pt.y >= 0 && pt.y < this.size)
+                    if (!landMap[pt.x][pt.y]) {
+                        if(voronoiMap[pt.x][pt.y] == fillValue) {
                             landMap[pt.x][pt.y] = true;
                             return true;
+                        } else if(rand.nextDouble() < this.expansionChanceMultiplier / pt.distance(fromPt)) {
+                            cellFillStack.push(pt);
                         }
-                    return false;
-                });
-            }
+                    }
+                return false;
+            });
         }
+        
+        
         
         //Save the output in the landMap, for now
         BufferedImage img = new BufferedImage(this.size, this.size, BufferedImage.TYPE_INT_RGB);
@@ -94,7 +95,6 @@ public class ContinentGenerator {
             Logger.getLogger(ContinentGenerator.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
-    
     
     public static void fill(Point startPoint, Predicate<Point> fillPredicate) {
         Stack<Point> fillStack = new Stack<>();
