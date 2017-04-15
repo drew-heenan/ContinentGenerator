@@ -23,6 +23,7 @@ public class ContinentGenerator {
         ContinentGenerator gen = new ContinentGenerator();
         gen.setXScale(0.05);
         gen.setYScale(0.06);
+        gen.setExpansionChanceMultiplier(4.0);
         gen.generate();
     }
     
@@ -61,6 +62,7 @@ public class ContinentGenerator {
         }
         
         Random rand = new Random(this.seed);
+        
         boolean[][] landMap = new boolean[this.size][this.size];
         Point fromPt = new Point(this.size/2, this.size/2);//new Point(this.size/2 + (int)(radius*Math.cos(theta)), this.size/2 + (int)(radius*Math.sin(theta)));
         Stack<Point> cellFillStack = new Stack<>();
@@ -82,13 +84,29 @@ public class ContinentGenerator {
             });
         }
         
-        
+        boolean[][] seaMap = new boolean[this.size][this.size];
+        Predicate<Point> seaFillPredicate = (Point pt) -> {
+            if(pt.x >= 0 && pt.x < this.size && pt.y >= 0 && pt.y < this.size)
+                if(!seaMap[pt.x][pt.y] && !landMap[pt.x][pt.y]) {
+                    seaMap[pt.x][pt.y] = true;
+                    return true;
+                }
+            return false;
+        };
+        for(int x = 0; x < this.size; x++) {
+            fill(new Point(x, 0), seaFillPredicate);
+            fill(new Point(x, this.size - 1), seaFillPredicate);
+        }
+        for(int y = 0; y < this.size; y++) {
+            fill(new Point(0, y), seaFillPredicate);
+            fill(new Point(this.size - 1, y), seaFillPredicate);
+        }
         
         //Save the output in the landMap, for now
         BufferedImage img = new BufferedImage(this.size, this.size, BufferedImage.TYPE_INT_RGB);
         for(int x = 0; x < this.size; x++)
             for(int y = 0; y < this.size; y++)
-                img.setRGB(x, y, new Color(0, landMap[x][y] ? 255 : 0, 0).getRGB());
+                img.setRGB(x, y, new Color(0, landMap[x][y] ? 255 : 0, seaMap[x][y] ? 255 : 0).getRGB());
         try {
             ImageIO.write(img, "png", new File("out.png"));
         } catch (IOException ex) {
