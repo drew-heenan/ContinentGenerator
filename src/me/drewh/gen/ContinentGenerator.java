@@ -1,5 +1,8 @@
 package me.drewh.gen;
 
+import com.flowpowered.noise.NoiseQuality;
+import com.flowpowered.noise.module.modifier.Turbulence;
+import com.flowpowered.noise.module.source.RidgedMulti;
 import com.flowpowered.noise.module.source.Voronoi;
 import java.awt.Color;
 import java.awt.Point;
@@ -10,7 +13,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.Stack;
-import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.imageio.ImageIO;
@@ -24,16 +26,18 @@ public class ContinentGenerator {
     public static void main(String[] args) {
         ContinentGenerator gen = new ContinentGenerator();
         gen.setSize(1024);
-        gen.setXScale(0.04);
-        gen.setYScale(0.04);
+        gen.setVoronoiXScale(0.04);
+        gen.setVoronoiYScale(0.04);
         gen.setMinimumLakeSize(400);
-        gen.setExpansionChanceMultiplier(4);
+        gen.setExpansionChanceMultiplier(2);
         gen.generate();
     }
     
     private int size = 1000, seed = 0;
     private int minimumLakeSize = 100;
-    private double xScale = 0.01, yScale = 0.01;
+    private int turbRoughness = 10;
+    private double turbPower = 1.0, turbFrequency = 1.5, turbXScale = 0.01, turbYScale = 0.01;
+    private double voronoiXScale = 0.01, voronoiYScale = 0.01;
     private double expansionChanceMultiplier = 1.0;
     
     private boolean[][] landMap, seaMap;
@@ -58,12 +62,32 @@ public class ContinentGenerator {
         this.minimumLakeSize = minimumLakeSize;
     }
     
-    public void setXScale(double xScale) {
-        this.xScale = xScale;
+    public void setVoronoiXScale(double xScale) {
+        this.voronoiXScale = xScale;
     }
     
-    public void setYScale(double yScale) {
-        this.yScale = yScale;
+    public void setVoronoiYScale(double yScale) {
+        this.voronoiYScale = yScale;
+    }
+    
+    public void setTurbulenceXScale(double xScale) {
+        this.turbXScale = xScale;
+    }
+    
+    public void setTurbulenceYScale(double yScale) {
+        this.turbYScale = yScale;
+    }
+    
+    public void setTurbulenceRoughness(int roughness) {
+    	this.turbRoughness = roughness;
+    }
+    
+    public void setTurbulencePower(double power) {
+    	this.turbPower = power;
+    }
+    
+    public void setTurbulenceFrequency(double frequency) {
+    	this.turbFrequency = frequency;
     }
     
     public void generate() {
@@ -76,33 +100,43 @@ public class ContinentGenerator {
         removeSmallLakes();
         System.out.println("Finding Shore Tiles...");
         findShoreTiles();
-        this.coastalTiles.add(new Point(size/2, size/2));
         System.out.println("Calculating General Altitude...");
         this.heightMap = calculateGeneralAltitude();
-        
-        System.out.println("Eroding...");
-        //for(int i = 0; i < 5; i++) {
-        	for(int j = 0; j < 10000000; j++) {
-        		Point pt = new Point(this.rand.nextInt(this.size), this.rand.nextInt(this.size));
-        		if(!seaMap[pt.x][pt.y])
-        			erode(pt, 2000, 0.1);
-        	}
-        	this.heightMap = blur(this.heightMap);
-        	this.heightMap = normalize(this.heightMap);
-        //}
+        System.out.println("Adding Turbulence...");
+        this.heightMap = addTurbulence(this.heightMap);
         
         
-        //Save the output in the landMap, for now
+        //Save the output in the heightMap, for now
         BufferedImage img = new BufferedImage(this.size, this.size, BufferedImage.TYPE_INT_RGB);
         for(int x = 0; x < this.size; x++)
             for(int y = 0; y < this.size; y++)
-                img.setRGB(x, y, new Color(this.landMap[x][y] ? 60 : 0, (int)(255*heightMap[x][y]), erodedPts.contains(new Point(x, y)) ? 255 : 0).getRGB());
+                img.setRGB(x, y, new Color(this.landMap[x][y] ? 60 : 0, (int)(255*heightMap[x][y]), 0).getRGB());
         try {
             ImageIO.write(img, "png", new File("out.png"));
         } catch (IOException ex) {
             Logger.getLogger(ContinentGenerator.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
+
+	private double[][] addTurbulence(double[][] map) {
+		double[][] heightMap = new double[map.length][];
+		RidgedMulti rm = new RidgedMulti();
+        rm.setNoiseQuality(NoiseQuality.BEST);
+        rm.setSeed(this.seed);
+        rm.setOctaveCount(4);
+        Turbulence turb = new Turbulence();
+        turb.setSourceModule(0, rm);
+        turb.setPower(this.turbPower);
+        turb.setRoughness(this.turbRoughness);
+        turb.setFrequency(this.turbFrequency);
+        for(int x = 0; x < map.length ; x++) {
+        	heightMap[x] = new double[map[x].length];
+        	for(int y = 0; y < map[x].length; y++) {
+        		heightMap[x][y] = map[x][y]*turb.getValue(this.turbXScale*x, this.turbYScale*y, 0);
+        	}
+        }
+        return normalize(heightMap);
+	}
 
 	private double[][] calculateGeneralAltitude() {
 		//Calculate general altitude
@@ -126,7 +160,7 @@ public class ContinentGenerator {
         				nearestLakeShore = 0;
         			nearestLakeShore = Math.pow(nearestLakeShore, 0.1);
         			if(!this.landMap[x][y])
-        				nearestLakeShore = -10*nearestLakeShore;
+        				nearestLakeShore = -100*nearestLakeShore;
         			double rawAltitude = nearestLakeShore + nearestCoast;
         			if(rawAltitude > greatestGeneralAltitude)
         				greatestGeneralAltitude = rawAltitude;
@@ -215,7 +249,7 @@ public class ContinentGenerator {
         voronoiNoise.setSeed(this.seed);
         for(int x = 0; x < this.size; x++) {
             for(int y = 0; y < this.size; y++) {
-                voronoiMap[x][y] = voronoiNoise.getValue(this.xScale*x, this.yScale*y, 0);
+                voronoiMap[x][y] = voronoiNoise.getValue(this.voronoiXScale*x, this.voronoiYScale*y, 0);
             }
         }
         
@@ -241,43 +275,6 @@ public class ContinentGenerator {
             });
         }
 		return landMap;
-	}
-	List<Point> erodedPts = new ArrayList<>();
-	private void erode(Point start, int max, double rate) {
-		//erodedPts.add(start);
-		double material = 0.1;
-		Point loc = start;
-		while(material > 0 && max > 0) {
-			double lowestVal = this.heightMap[loc.x][loc.y];
-			Point lowest = loc;
-			for(int dx = -1; dx <= 1; dx++) {
-				for(int dy = -1; dy <= 1; dy++) {
-					if(!(dx == 0 && dy == 0)) {
-						Point pt = new Point(loc.x + dx, loc.y + dy);
-						if(pt.x >= 0 && pt.x < this.size && pt.y >= 0 && pt.y < this.size) {
-							double height = this.heightMap[pt.x][pt.y];
-							if(height < lowestVal) {
-								lowestVal = height;
-								lowest = pt;
-							}
-						}
-					}
-				}
-			}
-			double delta = lowestVal - this.heightMap[loc.x][loc.y];
-			if(Math.abs(delta) < 1E-4) {
-				delta = 0.05;
-				if(delta != 0)
-					delta *= Math.abs(delta)/delta;
-			}
-			double materialChange = delta*rate;
-			material += materialChange;
-			heightMap[loc.x][loc.y] += delta*rate;
-			max--;
-			loc = lowest;
-			if(seaMap[lowest.x][lowest.y])
-				return;
-		}
 	}
 	
 	public static double[][] normalize(double[][] map) {
